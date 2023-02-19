@@ -5,7 +5,6 @@
 */
 #include <Arduino.h>
 #include <ESP_Mail_Client.h>
-//#include <ESP8266WiFi.h>
 
 
 // Replace these with your WiFi network settings
@@ -17,9 +16,12 @@ float calibration = 0.41; // Check Battery voltage using multimeter & add/subtra
 int bat_percentage;
 #define SMTP_server "smtp.gmail.com"
 #define SMTP_Port 465
-#define sender_email "sender@gmail.com" // note - commercial gmail user only. could not set this auth support on gmail on free account
+#define sender_email "sender@gmail.com" // note - you will need an "app account" for gmail, available only after setting up two factor auth on gmail
 #define sender_password "password_of_sender"
+#define sender_name "esp32 button to mail"
 #define Recipient_email "someone@has.no.mail.con"
+#define Recipient_name "Dude!"
+#define email_subject "esp32 has been triggered to send this mail"
 
 float mapfloat(float x, float in_min, float in_max, float out_min, float out_max)
 {
@@ -30,6 +32,9 @@ SMTPSession smtp;
 void setup()
 {
   delay(1000);
+  // Initialize the ADC
+  analogReadResolution(12); // Set the ADC resolution to 12 bits (0-4095)
+  analogSetAttenuation(ADC_11db); // Set the input attenuation to 11 dB (input voltage range 0-3.6V)
   Serial.begin(115200);
  
   WiFi.begin(ssid, password);
@@ -46,11 +51,12 @@ void setup()
   Serial.print("IP Address is: ");
   Serial.println(WiFi.localIP());
   
-  readValue = analogRead(A0); //read pin A0 value
+  //readValue = analogRead(A0); //read pin A0 value
   Serial.print("im reading from A0 ");
-  Serial.println(readValue);
-  float voltage = (((readValue * 3.3) / 1024) * 2 + calibration); //multiply by two as voltage divider network is 100K & 100K Resistor
-  bat_percentage = mapfloat(voltage, 2.8, 3.5, 0, 100); //2.8V as Battery Cut off Voltage & 4.2V as Maximum Voltage
+  // Read the battery voltage
+  int raw_adc = analogRead(A0); // Read the voltage from analog pin A0
+  float voltage = raw_adc * 0.000805664; // Convert the ADC reading to voltage (3.3V / 4095)
+  bat_percentage = mapfloat(voltage, 2.8, 3.3, 0, 100); //2.8V as Battery Cut off Voltage & 4.2V as Maximum Voltage
   if (bat_percentage >= 100)
   {
     bat_percentage = 100;
@@ -59,11 +65,24 @@ void setup()
   {
     bat_percentage = 1;
   }
+  
+  // Print the battery voltage to the serial monitor
+  Serial.print("Battery voltage: ");
+  Serial.print(voltage);
+  Serial.println("V");
+  Serial.print("Battery estimated precentage: ");
+  Serial.print(bat_percentage);
+  Serial.println("%");
+  
+  delay(100);
+  /*
+  Serial.println(readValue);
+  float voltage = (((readValue * 3.3) / 1024) * 2 + calibration); //multiply by two as voltage divider network is 100K & 100K Resistor
   //float voltage = readValue * (3.7 / 1023.0); //calculates real world voltage
   Serial.print("Voltage = "); //show “voltage before value on serial monitor
   Serial.println(voltage); //show value on serial monitor
   delay(250); //250ms delay
-
+*/
 // smtp start
   smtp.debug(1);
   ESP_Mail_Session session;
@@ -77,10 +96,10 @@ void setup()
   SMTP_Message message;
 
 
-  message.sender.name = "EmptyGasDetector";
+  message.sender.name = sender_name;
   message.sender.email = sender_email;
-  message.subject = "LowGas detector triggered";
-  message.addRecipient("Dude!",Recipient_email);
+  message.subject = email_subject;
+  message.addRecipient(Recipient_name,Recipient_email);
 
 //    //Send HTML message
   String htmlMsg = "<div style=\"color:#FF0000;\">";
